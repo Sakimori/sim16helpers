@@ -171,8 +171,8 @@ commands = [
 
 async def make_role(league_name, chat_channel, feed_channel):
     com_role = await chat_channel.guild.create_role(name=f"{league_name} Commissioner", mentionable=True)
-    await chat_channel.set_permissions(com_role, manage_messages=True)
-    await feed_channel.set_permissions(com_role, manage_messages=True)
+    await chat_channel.set_permissions(com_role, manage_messages=True, manage_channels=True)
+    await feed_channel.set_permissions(com_role, manage_messages=True, manage_channels=True)
     return com_role
 
 client.run(config()["token"])
