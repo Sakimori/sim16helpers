@@ -100,7 +100,7 @@ class AddLeagueCommishCommand(Command):
 class AddLeagueCommand(Command):
     name = "addleague"
     template = "k;addleague [league name]\n[any number of mentions]"
-    description = "Creates a pair of league channels, and gives the mentiones users message and pin privileges."
+    description = "Creates a pair of league channels, and gives the mentioned users message and pin privileges."
 
     def isauthorized(self, user):
         return user.guild_permissions.manage_channels
