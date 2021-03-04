@@ -12,6 +12,9 @@ class Command:
     async def execute(self, msg, command):
         return
 
+class CommandError(Exception):
+    pass
+
 
 class HelpCommand(Command):
     name = "help"
@@ -43,6 +46,7 @@ def config():
                 "owners" : [
                     0000
                     ],
+                "league_cat_id" : 816424161651589120,
                 "prefix" : ["k;", "k!"]
             }
         with open(config_filename, "w") as config_file:
@@ -53,9 +57,9 @@ def config():
         with open(config_filename) as config_file:
             return json.load(config_file)
 
-class AddLeagueCommish(Command):
+class AddLeagueCommishCommand(Command):
     name = "addcommissioner"
-    template = "k;addcommissioner [command]"
+    template = "k;addcommissioner [league name]\n[any number of mentions]"
     description = "Gives a given user message and pin privileges in a given league's pair of channels."
 
     def isauthorized(self, user):
@@ -67,7 +71,7 @@ class AddLeagueCommish(Command):
 
         try:
             league_name = command.split("\n")[0].strip()
-            users = msg.mentions()
+            users = msg.mentions
         except IndexError:
             await msg.channel.send("Not enough lines in the command!")
             return
@@ -86,11 +90,48 @@ class AddLeagueCommish(Command):
         com_role = discord.utils.find(lambda role: role.name == f"{league_name} Commissioner" and role.guild.id == msg.guild.id, msg.guild.roles)
 
         if com_role is None:
-            await make_role(league_name, chat_channel, feed_channel)
+            com_role = await make_role(league_name, chat_channel, feed_channel)
 
         for user in users:
-            member = msg.guild.get_member(user.id)
-            await member.add_roles(com_role)
+            await user.add_roles(com_role)
+
+        await msg.channel.send("Done!")
+
+class AddLeagueCommand(Command):
+    name = "addleague"
+    template = "k;addleague [league name]\n[any number of mentions]"
+    description = "Creates a pair of league channels, and gives the mentiones users message and pin privileges."
+
+    def isauthorized(self, user):
+        return user.guild_permissions.manage_channels
+
+    async def execute(self, msg, command):
+        if not self.isauthorized(msg.author):
+            return
+
+        try:
+            league_name = command.split("\n")[0].strip()
+            users = msg.mentions
+        except IndexError:
+            await msg.channel.send("Not enough lines in the command!")
+            return
+
+        if users == []:
+            await msg.channel.send("I need at least one user!")
+            return
+
+        leagues_category = discord.utils.find(lambda cat: cat.id == config()["league_cat_id"], msg.guild.categories)
+       
+        if leagues_category is None:
+            await msg.channel.send("Can't find the leagues category!")
+            return
+
+        chat_channel = await msg.guild.create_text_channel(f"{league_name.lower().replace(' ', '-')}-chat", category=leagues_category)
+        feed_channel = await msg.guild.create_text_channel(f"{league_name.lower().replace(' ', '-')}-feed", category=leagues_category)
+        com_role = await make_role(league_name, chat_channel, feed_channel)
+
+        for user in users:
+            await user.add_roles(com_role)
 
         await msg.channel.send("Done!")
 
@@ -98,8 +139,6 @@ class AddLeagueCommish(Command):
 
 @client.event
 async def on_ready():
-    global watching
-    db.initialcheck()
     print(f"logged in as {client.user} with token {config()['token']} to {len(client.guilds)} servers")
 
 @client.event
@@ -120,15 +159,20 @@ async def on_message(msg):
         comm = next(c for c in commands if command.startswith(c.name))
         await comm.execute(msg, command[len(comm.name):])
     except StopIteration:
-        await msg.channel.send("Can't find that command, boss; try checking the list with `m;help`.")
+        await msg.channel.send("I can't find that command! Try checking the list with `k;help`.")
     except CommandError as ce:
         await msg.channel.send(str(ce))
 
 commands = [
         HelpCommand(),
+        AddLeagueCommishCommand(),
+        AddLeagueCommand()
     ]
 
 async def make_role(league_name, chat_channel, feed_channel):
-    com_role = await msg.guild.create_role(name=f"{league_name} Commissioner", mentionable=True)
+    com_role = await chat_channel.guild.create_role(name=f"{league_name} Commissioner", mentionable=True)
     await chat_channel.set_permissions(com_role, manage_messages=True)
-    await chat_channel.set_permissions(feed_role, manage_messages=True)
+    await feed_channel.set_permissions(com_role, manage_messages=True)
+    return com_role
+
+client.run(config()["token"])
