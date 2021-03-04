@@ -21,7 +21,7 @@ class HelpCommand(Command):
     async def execute(self, msg, command):
         query = command.strip()
         if query == "":
-            text = "Here's everything we know how to do; use `m;help [command]` for more info:"
+            text = "Here's everything I know how to do; use `k;help [command]` for more info:"
             for comm in commands:
                 if comm.isauthorized(msg.author):
                     text += f"\n  - {comm.name}"
