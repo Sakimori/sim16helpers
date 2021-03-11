@@ -90,7 +90,7 @@ class AddLeagueCommishCommand(Command):
         com_role = discord.utils.find(lambda role: role.name == f"{league_name} Commissioner" and role.guild.id == msg.guild.id, msg.guild.roles)
 
         if com_role is None:
-            com_role = await make_role(league_name, chat_channel, feed_channel)
+            com_role = await make_admin_role(league_name, chat_channel, feed_channel)
 
         for user in users:
             await user.add_roles(com_role)
@@ -120,7 +120,7 @@ class AddLeagueCommand(Command):
             await msg.channel.send("I need at least one user!")
             return
 
-        leagues_category = discord.utils.find(lambda cat: cat.id == config()["league_cat_id"], msg.guild.categories)
+        leagues_category = find_league_category(msg.guild)
        
         if leagues_category is None:
             await msg.channel.send("Can't find the leagues category!")
@@ -128,13 +128,64 @@ class AddLeagueCommand(Command):
 
         chat_channel = await msg.guild.create_text_channel(f"{league_name.lower().replace(' ', '-')}-chat", category=leagues_category)
         feed_channel = await msg.guild.create_text_channel(f"{league_name.lower().replace(' ', '-')}-feed", category=leagues_category)
-        com_role = await make_role(league_name, chat_channel, feed_channel)
+        com_role = await make_admin_role(league_name, chat_channel, feed_channel)
 
         for user in users:
             await user.add_roles(com_role)
 
         await msg.channel.send("Done!")
 
+class ManagerSignupCommand(Command):
+    name = "managersignup"
+    template = "k;managersignup [league name]"
+    description = "Signs you up as a team manager for the given league. This role is pingable."
+
+    async def execute(self, msg, command):
+        league_name = command.strip()
+        leagues_category = find_league_category(msg.guild)
+       
+        if leagues_category is None:
+            await msg.channel.send("Can't find the leagues category!")
+            return
+
+        chat_channel = discord.utils.find(lambda channel: channel.name == f"{league_name.lower().replace(' ', '-')}-chat" and channel.guild.id == msg.guild.id, client.get_all_channels())
+        if chat_channel is None:
+            await msg.channel.send("That league doesn't have channels on this server!")
+            return
+
+        role = discord.utils.find(lambda role: role.name == f"{league_name} Team Manager" and role.guild.id == msg.guild.id, msg.guild.roles)
+
+        if role is None:
+            role = await make_vanity_role(msg.guild, f"{league_name} Team Manager", pingable=True)
+        await msg.author.add_roles(role)
+        await msg.channel.send("Done!")
+
+class ManagerStepdownCommand(Command):
+    name = "managerstepdown"
+    template = "k;managerstepdown [league name]"
+    description = "Removes the team manager role for the given league."
+
+    async def execute(self, msg, command):
+        league_name = command.strip()
+        leagues_category = find_league_category(msg.guild)
+       
+        if leagues_category is None:
+            await msg.channel.send("Can't find the leagues category!")
+            return
+
+        chat_channel = discord.utils.find(lambda channel: channel.name == f"{league_name.lower().replace(' ', '-')}-chat" and channel.guild.id == msg.guild.id, client.get_all_channels())
+        if chat_channel is None:
+            await msg.channel.send("That league doesn't have channels on this server!")
+            return
+
+        role = discord.utils.find(lambda role: role.name == f"{league_name} Team Manager" and role.guild.id == msg.guild.id, msg.author.roles)
+
+        if role is None:
+            await msg.channel.send("You already don't have that role. Congratulations! <:ElfneinWeld:497869710654963723>")
+            return
+
+        await msg.author.remove_roles(role)
+        await msg.channel.send("Done!")
 
 
 @client.event
@@ -166,13 +217,22 @@ async def on_message(msg):
 commands = [
         HelpCommand(),
         AddLeagueCommishCommand(),
-        AddLeagueCommand()
+        AddLeagueCommand(),
+        ManagerSignupCommand(),
+        ManagerStepdownCommand()
     ]
 
-async def make_role(league_name, chat_channel, feed_channel):
+async def make_admin_role(league_name, chat_channel, feed_channel):
     com_role = await chat_channel.guild.create_role(name=f"{league_name} Commissioner", mentionable=True)
     await chat_channel.set_permissions(com_role, manage_messages=True, manage_channels=True)
     await feed_channel.set_permissions(com_role, manage_messages=True, manage_channels=True)
     return com_role
+
+async def make_vanity_role(guild, role_name, pingable = False):
+    role = await guild.create_role(name=role_name, mentionable=pingable)
+    return role
+
+def find_league_category(guild):
+    return discord.utils.find(lambda cat: cat.id == config()["league_cat_id"], guild.categories)
 
 client.run(config()["token"])
