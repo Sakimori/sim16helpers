@@ -1,4 +1,4 @@
-import discord, json, os
+import discord, json, os, tarot
 
 data_dir = "data"
 config_filename = os.path.join(data_dir, "config.json")
@@ -187,6 +187,53 @@ class ManagerStepdownCommand(Command):
         await msg.author.remove_roles(role)
         await msg.channel.send("Done!")
 
+decks = {}
+spreads = {}
+
+class DeckCommand(Command):
+    name = "tarotdeck"
+    template = "k;tarotdeck"
+    description = "Gives you a brand new, unshuffled tarot deck!"
+
+    async def execute(self, msg, command):
+        if msg.author.id in decks:
+            await msg.channel.send("You already have a deck! Use k;shuffle or k;draw!")
+            return
+        decks[msg.author.id] = tarot.deck()
+        await msg.channel.send("You now have a tarot deck! Be sure to shuffle it before use!")
+
+class DeckShuffleCommand(Command):
+    name = "shuffle"
+    template = "k;shuffle"
+    description = "Shuffles your tarot deck."
+
+    async def execute(self, msg, command):
+        if msg.author.id not in decks:
+            await msg.channel.send("You don't have a deck! Try k;tarotdeck.")
+            return
+        decks[msg.author.id].shuffle()
+        await msg.channel.send("📇")
+
+class DrawCardCommand(Command):
+    name = "drawcard"
+    template = "k;drawcard"
+    description = "Draws a card into your current spread."
+
+    async def execute(self, msg, command):
+        if msg.author.id not in decks:
+            await msg.channel.send("You don't have a deck! Try k;tarotdeck.")
+            return
+        if msg.author.id not in spreads:
+            spreads[msg.author.id] = []
+        card = decks[msg.author.id].draw()
+        if not card:
+            raise CommandError("That deck is out of cards! Wow!!")
+        card_embed = card.embed()
+        card_embed.add_field(name=f"Card {len(spreads[msg.author.id])+1}", value=f"{msg.author.display_name}'s spread")
+        new_message = await msg.channel.send(embed=card_embed)
+        await new_message.add_reaction("🔄")
+        spreads[msg.author.id].append((new_message, card))
+
 
 @client.event
 async def on_ready():
@@ -214,12 +261,26 @@ async def on_message(msg):
     except CommandError as ce:
         await msg.channel.send(str(ce))
 
+@client.event
+async def on_reaction_add(reaction, user):
+    if user.id in spreads:
+        for message, card in spreads[user.id]:
+            if reaction.message == message and reaction.emoji == "🔄":
+                old_embed = message.embeds[0]
+                card.flipped = not card.flipped
+                new_embed = card.embed()
+                new_embed.add_field(name=old_embed.fields[0].name, value=old_embed.fields[0].value)
+                await message.edit(embed=new_embed)
+
 commands = [
         HelpCommand(),
         AddLeagueCommishCommand(),
         AddLeagueCommand(),
         ManagerSignupCommand(),
-        ManagerStepdownCommand()
+        ManagerStepdownCommand(),
+        DeckCommand(),
+        DeckShuffleCommand(),
+        DrawCardCommand()
     ]
 
 async def make_admin_role(league_name, chat_channel, feed_channel):
