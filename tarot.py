@@ -29,6 +29,9 @@ class deck(object):
         except:
             return False
 
+    def return_card(self, old_card):
+        self.deck.append(old_card)
+
 class suit(Enum):
     Majors = ""
     Cups = "of Cups"

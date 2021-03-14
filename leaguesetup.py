@@ -234,6 +234,23 @@ class DrawCardCommand(Command):
         await new_message.add_reaction("🔄")
         spreads[msg.author.id].append((new_message, card))
 
+class ReturnCardsCommand(Command):
+    name = "gathercards"
+    template = "k;gathercards"
+    description = "Gathers your spread back into your deck."
+
+    async def execute(self, msg, command):
+        if msg.author.id not in decks:
+            await msg.channel.send("You don't have a deck! Try k;tarotdeck.")
+            return
+        if msg.author.id not in spreads:
+            raise CommandError("You don't have any cards in a spread right now!")
+        for message, card in spreads[msg.author.id]:
+            card.flipped = False
+            decks[msg.author.id].return_card(card)
+            await message.delete()
+        del spreads[msg.author.id]
+        await msg.channel.send("Your cards are safe and sound! <:habbycat:651503718436438017>")
 
 @client.event
 async def on_ready():
@@ -266,6 +283,7 @@ async def on_reaction_add(reaction, user):
     if user.id in spreads:
         for message, card in spreads[user.id]:
             if reaction.message == message and reaction.emoji == "🔄":
+                await reaction.remove(user)
                 old_embed = message.embeds[0]
                 card.flipped = not card.flipped
                 new_embed = card.embed()
@@ -280,7 +298,8 @@ commands = [
         ManagerStepdownCommand(),
         DeckCommand(),
         DeckShuffleCommand(),
-        DrawCardCommand()
+        DrawCardCommand(),
+        ReturnCardsCommand()
     ]
 
 async def make_admin_role(league_name, chat_channel, feed_channel):
