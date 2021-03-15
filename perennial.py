@@ -22,6 +22,16 @@ class perennial(object):
         self.sheets = None
         self.sheet_id = None
 
+    def current_drafter(self):
+        """
+        returns team, user
+        """
+        if self.counter < len(self.teams_order) * self.rounds:
+            team = self.teams_order[self.counter % len(self.teams_order)]
+            return team, self.teams_dic[team]
+        else:
+            return False, None
+
     def connect(self, sheet_id):
         scope = ["https://www.googleapis.com/auth/spreadsheets"]
         creds = None
@@ -118,7 +128,11 @@ class perennial(object):
         return index + 2
 
     def add_available(self, add_name, range="Sheet1!A"):
-        player_row = self.player_row(ono.get_stats(add_name))
+        player_row, row_number = self.find_name(add_name)
+        if player_row:
+            self.remove_taken(add_name)
+        else:
+            player_row = self.player_row(ono.get_stats(add_name))
         old_index_start = self.available_names_index() 
         self.slide_sheet(old_index_start+1, 1)
 
@@ -134,15 +148,28 @@ class perennial(object):
         if not player_row or not self.check_for_name(remove_name):
             return False
 
+        self.sheets.values().clear(spreadsheetId=self.sheet_id, range=(range+str(row_number)+":F"+str(row_number))).execute()
         self.slide_sheet(row_number+1, -1)
 
+        self.add_taken(player_row, name_is_row = True)
+        
+
+    def add_taken(self, add_name, range="Sheet1!A", name_is_row = False):
         end_index = self.end_name_index()
-        end_range = range + str(end_index) + ":F"
-        append_body = {"range": end_range,
-                       "values": [player_row]}
+        end_range = range + str(end_index+1) + ":F"
+        append_body = {"range": end_range}
+        if name_is_row:
+            append_body["values"] = [add_name]
+        else:
+            append_body["values"] = [self.player_row(ono.get_stats(add_name))]
 
         self.sheets.values().update(spreadsheetId=self.sheet_id, range=end_range, valueInputOption="RAW", body=append_body).execute()
 
+    def remove_taken(self, remove_name, range="Sheet1!A"):
+        player_row, row_number = self.find_name(remove_name)
+
+        self.sheets.values().clear(spreadsheetId=self.sheet_id, range=(range+str(row_number)+":F"+str(row_number))).execute()
+        self.slide_sheet(row_number+1, -1)
 
     def next_team(self):
         self.counter += 1

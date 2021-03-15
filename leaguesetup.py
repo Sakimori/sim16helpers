@@ -1,4 +1,4 @@
-import discord, json, os, tarot, perennial
+import discord, json, os, tarot, perennial, asyncio
 
 data_dir = "data"
 config_filename = os.path.join(data_dir, "config.json")
@@ -193,11 +193,17 @@ class PerennialStartCommand(Command):
     name = "perennialstart"
     template = "k;perennialstart [spreadsheet id]\n[# of draft rounds]\n[mention]\n[first team name]\n..."
     description = "love youuuu 💜"
+    
 
     def isauthorized(self, user):
         return user.id == 147166236223078411 or user.id == 102691114762371072
 
     async def execute(self, msg, command):
+        global perennial_box
+        if perennial_box is not None:
+            await msg.channel.send("I'm already running the draft!!")
+            return 
+
         team_dic = {}
         teams_list = []
         sheet_id = command.split("\n")[0].strip()
@@ -206,14 +212,126 @@ class PerennialStartCommand(Command):
         this_user = None
         for i in range(2, len(msg_lines)):
             if i % 2 == 0:
-                this_user = discord.utils.find(lambda user: user.id == int(''.join(c for c in msg_lines[i] if c.isdigit())), msg.guild.members)
+                this_user = discord.utils.find(lambda user : user.id == (int(''.join(c for c in msg_lines[i] if c.isdigit()))), msg.mentions)
+                if this_user is None:
+                    await msg.channel.send("At least one of the mention lines is wrong, so I've stopped it for you to try again.")
+                    return
             else:
                 team_name = msg_lines[i].strip()
                 teams_list.append(team_name)
                 team_dic[team_name] = this_user
         perennial_box = perennial.perennial(msg.channel, team_dic, teams_list, rounds)
         perennial_box.connect(sheet_id)
+        next_team, next_user = perennial_box.current_drafter()
         await msg.channel.send("<:MikuPraise:643957692326739968>")
+        await msg.channel.send("First up:")
+        await msg.channel.send(f"{next_user.mention} for {next_team}!")
+
+class PerennialViewCommand(Command):
+    name = "perennialcheck"
+    template = "k;perennialcheck"
+    description = "Shows whose turn it is!"
+
+    async def execute(self, msg, command):
+        global perennial_box
+        if perennial_box is None:
+            await msg.channel.send("No draft running right now. Sorry!!")
+            return
+        team, owner = perennial_box.current_drafter()
+        await msg.channel.send(f"Now drafting: {owner.display_name} for {team}.")
+
+class PerennialPassCommand(Command):
+    name = "perennialpass"
+    template = "k;perennialpass"
+    description = "Use to pass on your draft, or, if you're star, use to skip someone who's taking way too long!"
+
+    async def execute(self, msg, command):
+        global perennial_box
+        if perennial_box is None:
+            await msg.channel.send("No draft running right now. Sorry!!")
+            return
+        team, owner = perennial_box.current_drafter()
+        if msg.author.id != owner.id and msg.author.id not in [147166236223078411, 102691114762371072]:
+            await msg.channel.send("This team ain't yours!! Be patient <:AngerDess:535188304165994506>")
+            return
+
+        perennial_box.counter += 1
+        next_team, next_user = perennial_box.current_drafter()
+        if next_team:
+            await msg.channel.send("Skipped! Up next:")
+            await msg.channel.send(f"{next_user.mention} for {next_team}!")
+        else:
+            await msg.channel.send("Starrrrrr, we're done!!")
+            perennial_box = None
+
+class PerennialDraftPlayer(Command):
+    name = "draftplayer"
+    template = "k;draftplayer [player name]\n[player to return to the draft]"
+    description = "Run this to draft a player to the team currently drafting! Only works if you're the registered founder, mind you."
+    
+
+    async def execute(self, msg, command):
+        global perennial_box
+        if perennial_box is None:
+            await msg.channel.send("No draft running right now. Sorry!!")
+            return
+
+        team, owner = perennial_box.current_drafter()
+        if msg.author.id != owner.id:
+            await msg.channel.send("This team ain't yours!! Be patient <:AngerDess:535188304165994506>")
+            return
+
+        player_add_name = command.split("\n")[0].strip()
+        player_remove_name = command.split("\n")[1].strip()
+        if not perennial_box.check_for_name(player_add_name):
+            await msg.channel.send("I can't find that player on the spreadsheet. Is that a me or a you problem?")
+            return
+
+        perennial_box.remove_available(player_add_name)
+        await asyncio.sleep(1)
+        perennial_box.add_available(player_remove_name)
+
+        command_to_send = f"""m;replaceplayer
+{team}
+{player_remove_name}
+{player_add_name}
+"""
+        perennial_box.counter += 1
+        next_team, next_user = perennial_box.current_drafter()
+        await msg.channel.send(command_to_send)
+        await asyncio.sleep(8)
+
+        if next_team:
+            await msg.channel.send("Done! Up next:")
+            await msg.channel.send(f"{next_user.mention} for {next_team}!")
+        else:
+            await msg.channel.send("Starrrrrr, we're done!!")
+            perennial_box = None
+
+
+class PerennialFixCommand(Command):
+    name = "perennialfix"
+    template = "k;perennialfix [available|taken]\n[player name]"
+    description = "in case someone typos a player name or something, this is here for you to fix the spreadsheet without breaking the automation 💜"
+
+    def isauthorized(self, user):
+        return user.id == 147166236223078411 or user.id == 102691114762371072
+
+    async def execute(self, msg, command):
+        global perennial_box
+        if perennial_box is None:
+            await msg.channel.send("No spreadsheet connection, start a fake draft to make one!")
+            return
+
+        if "available" in command.split("\n")[0].lower():
+            perennial_box.add_available(command.split("\n")[1].strip())
+        elif "taken" in command.split("\n")[0].lower():
+            perennial_box.add_taken(command.split("\n")[1].strip())
+        else:
+            await msg.channel.send("Tell me if it's an available name or one taken, please!")
+            return
+        await msg.channel.send("Done!")
+
 
 decks = {}
 spreads = {}
@@ -328,7 +446,11 @@ commands = [
         DeckShuffleCommand(),
         DrawCardCommand(),
         ReturnCardsCommand(),
-        PerennialStartCommand()
+        PerennialStartCommand(),
+        PerennialViewCommand(),
+        PerennialPassCommand(),
+        PerennialDraftPlayer(),
+        PerennialFixCommand()
     ]
 
 async def make_admin_role(league_name, chat_channel, feed_channel):
