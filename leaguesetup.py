@@ -1,5 +1,4 @@
 import discord, json, os, tarot, perennial
-from re import sub
 
 data_dir = "data"
 config_filename = os.path.join(data_dir, "config.json")
@@ -192,15 +191,27 @@ perennial_box = None
 
 class PerennialStartCommand(Command):
     name = "perennialstart"
-    template = "k;perennialstart [spreadsheet id]\n[mention]\n[team name]\n..."
+    template = "k;perennialstart [spreadsheet id]\n[# of draft rounds]\n[mention]\n[first team name]\n..."
     description = "love youuuu 💜"
 
     def isauthorized(self, user):
         return user.id == 147166236223078411 or user.id == 102691114762371072
 
     async def execute(self, msg, command):
-        perennial_box = perennial.perennial(msg.channel, {}, [], 2)
+        team_dic = {}
+        teams_list = []
         sheet_id = command.split("\n")[0].strip()
+        rounds = int(command.split("\n")[1].strip())
+        msg_lines = command.split("\n")
+        this_user = None
+        for i in range(2, len(msg_lines)):
+            if i % 2 == 0:
+                this_user = discord.utils.find(lambda user: user.id == int(''.join(c for c in msg_lines[i] if c.isdigit())), msg.guild.members)
+            else:
+                team_name = msg_lines[i].strip()
+                teams_list.append(team_name)
+                team_dic[team_name] = this_user
+        perennial_box = perennial.perennial(msg.channel, team_dic, teams_list, rounds)
         perennial_box.connect(sheet_id)
         await msg.channel.send("<:MikuPraise:643957692326739968>")
 
