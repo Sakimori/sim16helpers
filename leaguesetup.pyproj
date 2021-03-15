@@ -23,6 +23,10 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="leaguesetup.py" />
+    <Compile Include="onomancer.py" />
+    <Compile Include="perennial.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="tarot.py">
       <SubType>Code</SubType>
     </Compile>

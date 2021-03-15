@@ -1,4 +1,5 @@
-import discord, json, os, tarot
+import discord, json, os, tarot, perennial
+from re import sub
 
 data_dir = "data"
 config_filename = os.path.join(data_dir, "config.json")
@@ -187,6 +188,22 @@ class ManagerStepdownCommand(Command):
         await msg.author.remove_roles(role)
         await msg.channel.send("Done!")
 
+perennial_box = None
+
+class PerennialStartCommand(Command):
+    name = "perennialstart"
+    template = "k;perennialstart [spreadsheet id]\n[mention]\n[team name]\n..."
+    description = "love youuuu 💜"
+
+    def isauthorized(self, user):
+        return user.id == 147166236223078411 or user.id == 102691114762371072
+
+    async def execute(self, msg, command):
+        perennial_box = perennial.perennial(msg.channel, {}, [], 2)
+        sheet_id = command.split("\n")[0].strip()
+        perennial_box.connect(sheet_id)
+        await msg.channel.send("<:MikuPraise:643957692326739968>")
+
 decks = {}
 spreads = {}
 
@@ -299,7 +316,8 @@ commands = [
         DeckCommand(),
         DeckShuffleCommand(),
         DrawCardCommand(),
-        ReturnCardsCommand()
+        ReturnCardsCommand(),
+        PerennialStartCommand()
     ]
 
 async def make_admin_role(league_name, chat_channel, feed_channel):
